@@ -1,13 +1,22 @@
+import warnings
+warnings.filterwarnings('ignore')
 from llama_index.readers.web import SimpleWebPageReader
 from llama_index.llms.ollama import Ollama
 from llama_index.core.memory import ChatMemoryBuffer
-import json, uvicorn
-from fastapi import FastAPI, Response
-from pydantic import BaseModel
+import json, uvicorn, os, uuid, shutil, traceback
+from fastapi import FastAPI, Response, UploadFile, File, Form
+from pydantic import BaseModel, Field
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core import VectorStoreIndex
+from llama_index.readers.file import PDFReader
+
+UPLOAD_DIRECTORY = "pdf/"
+
+if not os.path.exists(UPLOAD_DIRECTORY):
+    os.makedirs(UPLOAD_DIRECTORY)
+
 
 system_prompt_llama = """Your responses should be precise and exclusively related to female reproductive health. 
 You always bold the response that are important, title, heading, label, bullet points or points. 
@@ -34,7 +43,7 @@ embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
 Settings.embed_model = embed_model
 Settings.node_parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
 Settings.num_output = 512
-Settings.context_window = 3900
+Settings.context_window = 32000
 
 index_llama = VectorStoreIndex.from_documents(data, embed_model=embed_model)
 
@@ -46,26 +55,51 @@ app = FastAPI()
 class Input(BaseModel):
     question: str
     sess_id: int
+    file: UploadFile = File(None)
 
 @app.post("/chat")
-def chat(input: Input):
-    question = input.question
-    sess_id = input.sess_id
+async def chat(
+    question: str = Form(...), 
+    sess_id: str = Form(...), 
+    file: UploadFile = File(None)  # Optional file upload
+):
+    try:
+        # Check if the file is provided and it's not set to 'none'
+        if file is not None and file.filename.lower() != 'none':
+            # Generate a unique filename
+            fname = str(uuid.uuid1())
+            path = f'{UPLOAD_DIRECTORY}{fname}.pdf'
 
-    memory = ChatMemoryBuffer.from_defaults(token_limit=100000)
+            # Save the uploaded file to the specified path
+            with open(path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
 
-    if sess_id not in sess.keys():
-        sess[sess_id] = index_llama.as_chat_engine(chat_mode='context', memory=memory, system_prompt=system_prompt_llama)
+                pdf_read = PDFReader()
 
-    resp = sess[sess_id].chat(f'{question}')
-    score = max([x.score for x in resp.source_nodes])
-    result = resp.response
-    result = result + f'\n \n **Score : {score}%**'
-    response_ = {
-        "result": result
-        }
-    
-    return Response(content=json.dumps(response_, default=str), headers={"Content-Type": "application/json"})
+                data = pdf_read.load_data(path)
+
+                text = ' '.join([x.text for x in data])
+        else:
+            text = ''
+
+        memory = ChatMemoryBuffer.from_defaults(token_limit=100000)
+
+        if sess_id not in sess.keys():
+            sess[sess_id] = index_llama.as_chat_engine(chat_mode='context', memory=memory, system_prompt=system_prompt_llama)
+
+        resp = sess[sess_id].chat(f'{question} {text}')
+        score = max([x.score for x in resp.source_nodes])
+        result = resp.response
+        result = result + f'\n \n **Score : {score}%**'
+        response_ = {
+            "result": result
+            }
+        
+        return Response(content=json.dumps(response_, default=str), headers={"Content-Type": "application/json"})
+    except:
+        error = traceback.format_exc()
+        print(error)
+        return Response(content=json.dumps({'message' : error}, default=str), headers={"Content-Type": "application/json"})
 
 if __name__ == "__main__":
     uvicorn.run("api:app", host="0.0.0.0", port=2048, workers=1, reload=False)
