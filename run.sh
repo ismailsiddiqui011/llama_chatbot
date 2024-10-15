@@ -13,10 +13,12 @@ echo "Ollama installation completed."
 # Log and run 'ollama serve' in the background
 echo "Starting 'ollama serve' in the background..."
 ollama serve &
+sleep 5
 echo "'ollama serve' started."
 
 # Log and run 'ollama run llama3.2' in the background
 echo "Starting 'ollama run llama3.2' in the background..."
+sleep 5
 ollama run llama3.2 &
 echo "'ollama run llama3.2' started."
 
