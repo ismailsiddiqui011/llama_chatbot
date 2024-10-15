@@ -1,11 +1,25 @@
 #!/bin/bash
+
+# Log and install dependencies
+echo "Installing dependencies from requirements.txt..."
 pip install -r requirements.txt
+echo "Dependencies installed."
+
+# Log and install Ollama
+echo "Installing Ollama..."
 curl -fsSL https://ollama.com/install.sh | sh
-# Run 'ollama serve' in the background
+echo "Ollama installation completed."
+
+# Log and run 'ollama serve' in the background
+echo "Starting 'ollama serve' in the background..."
 ollama serve &
+echo "'ollama serve' started."
 
-# Run 'ollama run llama3.2' in the background
+# Log and run 'ollama run llama3.2' in the background
+echo "Starting 'ollama run llama3.2' in the background..."
 ollama run llama3.2 &
+echo "'ollama run llama3.2' started."
 
-# Run the Python API in the foreground
+# Log and run the Python API in the foreground
+echo "Starting Python API (api.py) in the foreground..."
 python api.py
