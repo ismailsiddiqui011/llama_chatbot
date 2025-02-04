@@ -24,4 +24,6 @@ echo "'ollama run llama3.2' started."
 
 # Log and run the Python API in the foreground
 echo "Starting Python API (api.py) in the foreground..."
-python api.py
+# python api.py
+exec python api.py  # Ensures signals are forwarded properly
+
